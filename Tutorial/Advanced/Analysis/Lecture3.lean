@@ -33,15 +33,24 @@ def «0.9999999» : CauSeq ℚ abs where
 
 -- `0.9999999...`は`1`と等しい
 theorem «0.9999999 = 1» : Real.ofCauchy (Quotient.mk CauSeq.equiv «0.9999999») = (1 : ℝ) := by
-  calc _ = Real.ofCauchy (Quotient.mk CauSeq.equiv (CauSeq.const abs 1)) := ?_
-       _ = (1 : ℝ) := Real.ofCauchy_one
-  rw [«0.9999999»]
-  congr 1
-  apply Quotient.sound
-  intro ε ε0
-  suffices ∃ i, ∀ (j : ℕ), j ≥ i → (10 ^ j : ℚ)⁻¹ < ε by simpa [abs]
-  -- ヒント: `pow_unbounded_of_one_lt`と`inv_lt_of_inv_lt`を使って、欲しい`i`を手に入れよう
-  sorry
+  calc Real.ofCauchy (Quotient.mk CauSeq.equiv «0.9999999»)
+    _ = Real.ofCauchy (Quotient.mk CauSeq.equiv (CauSeq.const abs 1)) := ?eq
+    _ = (1 : ℝ) := Real.ofCauchy_one
+  case eq =>
+    rw [«0.9999999»]
+    congr 1
+    apply Quotient.sound
+    intro ε ε0
+    suffices ∃ i, ∀ (j : ℕ), j ≥ i → (10 ^ j : ℚ)⁻¹ < ε by simpa [abs]
+    -- ヒント: `pow_unbounded_of_one_lt`と`inv_lt_of_inv_lt`を使って、欲しい`i`を手に入れよう
+    have h : ∃ i : ℕ, ε⁻¹ < 10 ^ i := pow_unbounded_of_one_lt ε⁻¹ (by linarith)
+    rcases h with ⟨i, hi⟩
+    have hi : (10 ^ i : ℚ)⁻¹ < ε := inv_lt_of_inv_lt ε0 hi
+    exists i
+    intro j hj
+    calc (10 ^ j : ℚ)⁻¹
+      _ ≤ (10 ^ i : ℚ)⁻¹ := inv_pow_le_inv_pow_of_le (by linarith) hj
+      _ < ε              := hi
 
 open Filter Topology Set Classical
 
@@ -64,6 +73,8 @@ TIPS: 閉区間`{ x | a ≤ x ∧ x ≤ b }`は`Icc a b`と表す。Inteval-clos
 以下ではステップ1,2の証明があらかじめ与えられており、最後にステップ3が演習問題として残されている。
 すぐに問題に取り組みたい人はファイルの最後までスキップしても問題ないだろう。
 -/
+
+/- 解答者注: `ι`は添字集合のことだと思われる。 -/
 
 /-- `ℝ`の部分集合`s`の開被覆`U`が有限部分被覆を持つことを表すための命題 -/
 def HasFinSubCover {ι : Type} (U : ι → Set ℝ) (s : Set ℝ) : Prop := 
@@ -247,14 +258,35 @@ theorem HasFinSubCover_of_Icc (hU : ∀ (i : ι), IsOpen (U i)) (cover : Icc 0 1
   rcases cover (nestedIntervalLim_mem U 0) with ⟨_, ⟨i, rfl⟩, hU' : c ∈ U i⟩
   rcases Metric.isOpen_iff.mp (hU i) c hU' with ⟨ε, ε0, hε⟩
   have ⟨n, hn⟩ : ∃ n : ℕ, (ε / 2)⁻¹ < 2 ^ n := by
-    sorry
+    exact pow_unbounded_of_one_lt (ε / 2)⁻¹ (by linarith)
   suffices HasFinSubCover U I(n) by 
-    sorry
+    apply nestedInterval_not_HasFinSubCover H n
+    exact this
   suffices I(n) ⊆ U i by
-    sorry
+    rw [HasFinSubCover]
+    exists {i}
+    simp only [Finset.mem_singleton, iUnion_iUnion_eq_left]
+    exact this
   suffices ∀ x, x ∈ I(n) → |x - c| < ε by
-    sorry
-  sorry
+    intro x hx₁
+    exact hε (this x hx₁)
+  intro x hx₁
+  have hc : c ∈ I(n) := nestedIntervalLim_mem U n
+  rw [Icc, mem_setOf_eq] at hx₁ hc
+  have aux : |x - c| ≤ β n - α n := by
+    rw [abs_sub_le_iff]
+    constructor
+    · apply sub_le_sub
+      · exact hx₁.right
+      · exact hc.left
+    · apply sub_le_sub
+      · exact hc.right
+      · exact hx₁.left
+  calc |x - c|
+    _ ≤ β n - α n          := aux
+    _ = (2 ^ n : ℝ)⁻¹      := nestedInterval_len U n
+    _ < 2 * (2 ^ n : ℝ)⁻¹  := lt_two_mul_self (by positivity)
+    _ < ε                  := (lt_div_iff' (by linarith)).mp (inv_lt_of_inv_lt (half_pos ε0) hn)
 
 -- 空でない上に有界な実数集合が上限を持つことを用いた別証明
 /-- 閉区間`Icc 0 1`はコンパクト -/
@@ -263,13 +295,35 @@ example (hU : ∀ (i : ι), IsOpen (U i)) (cover : Icc 0 1 ⊆ ⋃ (i : ι), U i
   set A := { x : ℝ | x ∈ Icc 0 1 ∧ HasFinSubCover U (Icc 0 x) }
   have A0 : 0 ∈ A := by
     rcases cover (left_mem_Icc.mpr zero_le_one) with ⟨_, ⟨i, rfl⟩, hU' : 0 ∈ U i⟩
-    sorry
+    rw [mem_setOf_eq]
+    constructor
+    · rw [mem_Icc]
+      constructor
+      · linarith
+      · linarith
+    · rw [Icc_self, HasFinSubCover]
+      exists {i}
+      simp only [Finset.mem_singleton, iUnion_iUnion_eq_left, singleton_subset_iff]
+      exact hU'
   have A1 : A.Nonempty := ⟨0, A0⟩
   have A2 : 1 ∈ upperBounds A := fun x hx ↦ hx.1.2
   -- `c`は`A`の最小上界
   have ⟨c, ⟨hAc, hAc'⟩⟩ : ∃ c, IsLUB A c := ⟨sSup A, isLUB_csSup A1 ⟨1, A2⟩⟩
   have hc : c ∈ Icc 0 1 := by
-    sorry
+    rw [mem_Icc]
+    rw [lowerBounds, upperBounds, mem_setOf_eq] at hAc'
+    have h₁ : 1 ∈ {x | ∀ ⦃a : ℝ⦄, a ∈ A → a ≤ x} → c ≤ 1 := @hAc' (1 : ℝ)
+    rw [mem_setOf_eq] at h₁
+    have h₂ : ∀ ⦃a : ℝ⦄, a ∈ A → a ≤ 1 := by
+      intro a ha
+      rw [mem_setOf_eq, Icc] at ha
+      have ha := ha.left
+      rw [mem_setOf_eq] at ha
+      exact ha.right
+    rw [upperBounds, mem_setOf_eq] at hAc
+    constructor
+    · exact @hAc 0 A0
+    · exact h₁ h₂
   rcases cover hc with ⟨_, ⟨i, rfl⟩, hUc' : c ∈ U i⟩
   have hcA : c ∈ A := by
     rcases hc.1.eq_or_lt with rfl | hlt
@@ -280,22 +334,53 @@ example (hU : ∀ (i : ι), IsOpen (U i)) (cover : Icc 0 1 ⊆ ⋃ (i : ι), U i
       rcases ((IsLUB.frequently_mem ⟨hAc, hAc'⟩ A1).and_eventually 
         (Ioc_mem_nhdsWithin_Iic ⟨hxc, le_rfl⟩)).exists with ⟨y, ⟨-, hyf⟩, hy⟩
       apply hasFinSubCover_concat hyf
-      sorry
+      exists {i}
+      simp only [Finset.mem_singleton, iUnion_iUnion_eq_left]
+      have h₁ : Icc y c ⊆ Ioc x c := by
+        rw [Icc, Ioc, setOf_subset_setOf]
+        intro a ha
+        constructor
+        · apply lt_of_lt_of_le hy.left
+          exact ha.left
+        · exact ha.right
+      calc Icc y c
+        _ ⊆ Ioc x c := h₁
+        _ ⊆ U i := hxU
   suffices c = 1 from this.symm ▸ hcA.2
   by_contra hnc
   have hlt : c < 1 := Ne.lt_of_le hnc (A2 hcA)
-  rcases(mem_nhdsWithin_Ici_iff_exists_mem_Ioc_Ico_subset hlt).mp
+  rcases (mem_nhdsWithin_Ici_iff_exists_mem_Ioc_Ico_subset hlt).mp
     (mem_nhdsWithin_of_mem_nhds <| (hU i).mem_nhds hUc') with ⟨c', ⟨hc'1, hc'2⟩, hc'U⟩
-  have : c' ∈ A := by
+  have hc'A : c' ∈ A := by
     constructor
-    · sorry
+    · rw [Icc, mem_setOf_eq]
+      constructor
+      · have h₁ : 0 ≤ c := @hAc 0 A0
+        have h₂ : 0 < c' := calc 0
+          _ ≤ c := h₁
+          _ < c' := hc'1
+        exact le_of_lt h₂
+      · exact hc'2
     · apply hasFinSubCover_concat hcA.2
       dsimp [Icc] at hc
       have : c' ∈ Icc 0 1 := ⟨by linarith, by linarith⟩
       rcases cover this with ⟨_, ⟨i', rfl⟩, hUc' : c' ∈ U i'⟩
       -- ヒント: `Ico_union_right`と`union_subset_union`を用いるとよいかもしれない
-      sorry
-  sorry
+      rw [HasFinSubCover]
+      exists {i, i'}
+      rw [←Ico_union_right]
+      simp only [Finset.mem_singleton, Finset.mem_insert, iUnion_iUnion_eq_or_left, iUnion_iUnion_eq_left]
+      apply union_subset_union
+      · exact hc'U
+      · rw [singleton_subset_iff]
+        exact hUc'
+      · exact le_of_lt hc'1
+  have h₁ : c' ≤ c := hAc hc'A
+  have h₂ : c < c := calc c
+    _ < c' := hc'1
+    _ ≤ c  := h₁
+  apply (lt_self_iff_false c).mp
+  exact h₂
 
 end
 

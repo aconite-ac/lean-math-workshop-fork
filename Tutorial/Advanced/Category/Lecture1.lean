@@ -78,14 +78,18 @@ variable {C : Type u} [Category.{u, v} C] {a b c d e : C}
 example (f : Hom a b) (g : Hom b c) (h : Hom c d) (i : Hom d e) : 
     (f ≫ (𝟙 b ≫ g)) ≫ (h ≫ i) = f ≫ (g ≫ ((𝟙 c ≫ h) ≫ i)) := by
   -- ヒント: `simp`を使えば圏の公理を使って式が簡略化される
-  sorry
+  rw [id_comp g, id_comp h, assoc f g (h ≫ i)]
 
 example (f : Hom a b) (g : Hom b a) (h₁ h₂ : Hom b c) (Hgf : g ≫ f = 𝟙 b) (Hfh : f ≫ h₁ = f ≫ h₂) : 
     h₁ = h₂ := by
   calc h₁ = 𝟙 b ≫ h₁ := by simp
     _ = (g ≫ f) ≫ h₁ := by rw [Hgf]
     -- 必要に応じて行を追加しよう
-    _ = h₂ := by sorry
+    _ = g ≫ (f ≫ h₁) := by rw [assoc g f h₁]
+    _ = g ≫ (f ≫ h₂) := by rw [Hfh]
+    _ = (g ≫ f) ≫ h₂ := by rw [assoc g f h₂]
+    _ = 𝟙 b ≫ h₂ := by rw [Hgf]
+    _ = h₂ := by rw [id_comp h₂]
 
 /- # 圏の例 -/
 
@@ -97,6 +101,20 @@ instance : Category Type where
   id X := id
   /- 公理の証明を書いていないにもかかわらずエラーが出ていないのはデフォルト引数の`aesop`が成功して
   いることを意味する -/
+/- 手動の証明
+  id_comp := by 
+    intro a b f
+    show id ∘ f = f
+    rw [Function.comp.left_id]
+  comp_id := by
+    intro a b f
+    show f ∘ id = f
+    rw [Function.comp.right_id]
+  assoc := by
+    intro a b c d f g h
+    show h ∘ g ∘ f = (h ∘ g) ∘ f
+    rw [Function.comp.assoc]
+-/
 
 /- TIPS: `pp.universes`オプションによって、宇宙を明示させることができる。-/
 set_option pp.universes true in 
@@ -135,9 +153,21 @@ instance : Category CommRingCat where
   id R := RingHom.id R
   /- 以下の公理については証明を書いてもよいが、省略してもエラーがでないかどうかをまず確認してみよう。
   もしエラーが出なければ、それは`aesop`が成功したことを意味する。 -/
-  id_comp := sorry
-  comp_id := sorry
-  assoc := sorry
+  /- 解答者注: 成功した。以下のコメント内に手動の証明を記す。 -/
+/-
+  id_comp := by
+    intro a b f
+    show RingHom.comp f (RingHom.id a.base) = f
+    rw [RingHomCompTriple.comp_eq]
+  comp_id := by
+    intro a b f
+    show RingHom.comp (RingHom.id b.base) f = f
+    rw [RingHomCompTriple.comp_eq]
+  assoc := by
+    intro a b c d f g h
+    show RingHom.comp h (RingHom.comp g f) = RingHom.comp (RingHom.comp h g) f
+    rw [RingHom.comp_assoc]
+-/
 
 /- 次は可換環`R`に対して`R`上の可換代数の圏を定義する。-/
 
@@ -162,9 +192,21 @@ instance {R : CommRingCat} : Category (CommAlgCat R) where
   Hom A B := AlgHom R A B
   comp f g := AlgHom.comp g f
   id A := AlgHom.id R A
-  id_comp := sorry
-  comp_id := sorry
-  assoc := sorry
+  /- 解答者注: 証明は省略可能。以下のコメント内に手動の証明を記す。 -/
+/-
+  id_comp := by
+    intro a b f
+    show AlgHom.comp f (AlgHom.id R.base a.base) = f
+    rw [AlgHom.comp_id]
+  comp_id := by
+    intro a b f
+    show AlgHom.comp (AlgHom.id R.base b.base) f = f
+    rw [AlgHom.id_comp]
+  assoc := by
+    intro a b c d f g h
+    show AlgHom.comp h (AlgHom.comp g f) = AlgHom.comp (AlgHom.comp h g) f
+    rw [AlgHom.comp_assoc]
+-/
 
 /- 定義の上の`@[simps]`はおまじないで、ここでは特に意味がない。`Lecture 2`で役に立つ。 -/
 

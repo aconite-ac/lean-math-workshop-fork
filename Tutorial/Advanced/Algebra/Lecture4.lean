@@ -32,13 +32,20 @@ def leftRel {G} [Group G] (H : Subgroup G) : Setoid G where
   r a b := a⁻¹ * b ∈ H
   iseqv := { -- `r`が同値関係なことを示す。
     refl := by -- 反射律
-      sorry
+      intro x
+      rw [inv_mul_self]
+      exact H.one_mem
     symm := by -- 対称律
       -- ヒント: `H.inv_mem_iff`が使えるかも。
-      sorry
+      intro x y hxy
+      rw [←H.inv_mem_iff, mul_inv_rev, inv_inv]
+      exact hxy
     trans := by -- 推移律
       -- ヒント: `H.mul_mem`が使えるかも。
-      sorry
+      intro x y z hxy hyz
+      have hxyyz : x⁻¹ * y * (y⁻¹ * z) ∈ H := H.mul_mem hxy hyz
+      rw [mul_assoc x⁻¹ y (y⁻¹ * z), ←mul_assoc y y⁻¹ z, mul_inv_self, one_mul] at hxyyz
+      exact hxyyz
   }
 
 /-- 群`G`とその部分群`H`について、左剰余類のなす集合、
@@ -105,20 +112,29 @@ instance : GroupAction G (G ⧸ H) where
   それが`G ⧸ H`上でwell-definedなことの証明を与える。
   -/
   smul := fun a ↦ lift (fun x ↦ (a * x) ⋆ H) <| by
-    sorry
+    intro b c hbc
+    show mk (a * b) = mk (a * c)
+    show (a * b) ⋆ H = (a * c) ⋆ H
+    rw [eq]
+    rw [mul_inv_rev, mul_assoc b⁻¹ a⁻¹ (a * c), ←mul_assoc a⁻¹ a c, inv_mul_self, one_mul]
+    exact hbc
   one_smul' := by
     /- これは「任意の`G ⧸ H`の元について◯◯」という形をしている。
     普通に`intro`すると`G ⧸ H`の元を取ることになり面倒だが、
     `rintro ⟨a⟩`とすると、`G`の元`a : G`についての主張に書き換わる。
     -/
-    sorry
+    rintro ⟨x⟩
+    show (1 * x) ⋆ H = x ⋆ H
+    rw [one_mul]
   mul_smul' := by
     /- ヒント: 上のように`rintro`を適切に使うとよい。
     また、ゴールが定義上`? ⋆ H = ? ⋆ H`という形と同じときは、
     `change _ ⋆ H = _ ⋆ H`とすればゴールが変わる。
     （他にもいろんなやり方があるだろう。）
     -/
-    sorry
+    rintro a b ⟨x⟩
+    show (a * b * x) ⋆ H = (a * (b * x)) ⋆ H
+    rw [mul_assoc]
 
 -- `G ⧸ H`上での`G`作用の定義の確認
 @[simp]
@@ -157,7 +173,11 @@ instance {H : Subgroup G} : IsTransitive G (G ⧸ H) where
   exists_smul_eq := by
     -- 任意の`G ⧸ H`の元2つについて◯◯、という主張なので、
     -- `rintro ⟨a⟩ ⟨b⟩`により2つ`G`の元をとってこれる。
-    sorry
+    rintro ⟨x⟩ ⟨y⟩
+    show ∃ a : G, a • (x ⋆ H) = (y ⋆ H)
+    show ∃ a : G, (a * x) ⋆ H = (y ⋆ H)
+    exists (y * x⁻¹)
+    rw [inv_mul_cancel_right]
 
 -- 逆に全ての空でない推移的`G`集合はこの形なことを見ていこう。
 
@@ -169,11 +189,19 @@ def stabilizer (G) [Group G] {X} [GroupAction G X] (x : X) : Subgroup G where
   carrier := { a : G | a • x = x }
   -- 部分群の公理を満たすことを示そう。
   one_mem' := by
-    sorry
+    rw [Set.mem_setOf_eq, one_smul]
   mul_mem' := by
-    sorry
+    intro a b
+    repeat rw [Set.mem_setOf_eq]
+    intro ha hb
+    rw [←smul_smul, hb, ha]
   inv_mem' := by
-    sorry
+    intro a
+    repeat rw [Set.mem_setOf_eq]
+    intro ha
+    have h : a⁻¹ • a • x = a⁻¹ • x := congrArg (fun x : X => a⁻¹ • x) ha
+    rw [inv_smul_smul] at h
+    exact h.symm
 
 -- 以下`X`を`G`集合とする。
 variable [GroupAction G X]
@@ -190,20 +218,39 @@ def leftQuotientStabilizerIsoSelfOfIsTransitive
   -- `G → X, a ↦ a • x₀`を`G ⧸ stabilizer G x₀`上の写像にリフトさせよう。
   toFun := LeftQuotient.lift (fun a ↦ a • x₀) <| by
     -- 写像がwell-definedなことを示す必要がある。
-    sorry
+    intro a b hq
+    show a • x₀ = b • x₀
+    rw [mem_stabilizer_iff] at hq
+    conv =>
+      lhs
+      rw [← hq]
+    rw [smul_smul, mul_inv_cancel_left]
   map_smul' := by -- 上の写像が`G`同変なこと。
     -- 「`G ⧸ H`の元について◯◯」がゴールなら、
     -- `rintro ⟨a⟩`とすれば`a : G`についての主張に書き換わる。
-    sorry
+    rintro a ⟨x⟩
+    show (a * x) • x₀ = a • x • x₀
+    rw [mul_smul]
   injective := by -- 単射性
-    sorry
+    rw [Function.Injective]
+    rintro ⟨a⟩ ⟨b⟩
+    show a • x₀ = b • x₀ → LeftQuotient.mk a = LeftQuotient.mk b
+    intro hab
+    rw [LeftQuotient.eq, mem_stabilizer_iff]
+    have h : a⁻¹ • a • x₀ = a⁻¹ • b • x₀ := congrArg (fun x : X => a⁻¹ • x) hab
+    rw [inv_smul_smul, smul_smul] at h
+    exact h.symm
   surjective := by -- 全射性
     -- 証明は普通にやってもちょっと複雑なので、一度紙等に通常の証明を書いて考えてみるとよいかもしれない。
 
     -- 今`X`は推移的という仮定があるので、`x y : X`に対して、
     -- `∃ a : G, a • x = y`という形の主張は、
     -- `apply IsTransitive.exists_smul_eq`で示すことができる。
-    sorry
+    rw [Function.Surjective]
+    intro b
+    show ∃ a, LeftQuotient.lift (fun a : G ↦ a • x₀) (_ : ∀ (a b : G), a⁻¹ * b ∈ stabilizer G x₀ → a • x₀ = b • x₀) a = b
+    obtain ⟨t, ht⟩ := IsTransitive.exists_smul_eq (G := G) x₀ b
+    exists t ⋆ (stabilizer G x₀)
 
 end GroupAction
 

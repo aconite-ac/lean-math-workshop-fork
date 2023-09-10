@@ -26,8 +26,9 @@ structure Initial (a : C) where
 
 /-- 始対象からの射がふたつ存在すれば、それらは等しい。 -/
 theorem Initial.uniq' {a : C} (h : Initial a) {b : C} (f g : Hom a b) : f = g :=
-  calc f = h.fromInitial b := by sorry
-       _ = g := by sorry
+  calc f
+    _ = h.fromInitial b := by rw [h.uniq f]
+    _ = g := by rw [h.uniq g]
 
 end Category
 
@@ -40,12 +41,13 @@ example : Initial Empty where
   fromInitial X := by
     intro x
     -- ヒント: 空写像は`Empty.elim`で表される。`apply Empty.elim`を試してみよう。
-    sorry
+    exact Empty.elim x
   uniq := by
     intro X f
     funext x
     -- ヒント: 空写像のコドメインは命題でもよい（空虚な真）
-    sorry
+    exfalso
+    exact IsEmpty.false x
     
 /-- 整数環`ℤ`は可換環の圏における始対象である。 -/
 /- 環とは底集合と環構造の組であった。底集合`ℤ`に対して、`inferInstance`がmathlibのどこかで定義されて
@@ -110,13 +112,14 @@ instance : Category (Cocone F) where
       comm := by 
         intro j
         calc r.toVertex j ≫ f.hom ≫ g.hom 
-          _ = (r.toVertex j ≫ f.hom) ≫ g.hom := by sorry
-          _ = s.toVertex j ≫ g.hom := by sorry
-          _ = t.toVertex j := by sorry }
+          _ = (r.toVertex j ≫ f.hom) ≫ g.hom := by rw [assoc (C := C)]
+          _ = s.toVertex j ≫ g.hom := by rw [CoconeHom.comm]
+          _ = t.toVertex j := by rw [CoconeHom.comm] }
   id t := 
     { hom := 𝟙 t.vertex
       comm := by
-        sorry }
+        intro j
+        rw [comp_id] }
 
 /- これで余極限を定義する準備が整った。余極限は普遍性を持つ余錐であると述べたが、ここでいう普遍性とは
 始対象のことである。-/
@@ -179,28 +182,37 @@ end Coproduct
 /-- 直和を頂点に持つ余錐 -/
 @[simps]
 def sumCocone (F : Functor Coproduct.Shape Type) : Cocone F where
-  vertex := F.obj .l ⊕ F.obj .r
-  toVertex j := match j with
+  vertex := F.obj Coproduct.Shape.l ⊕ F.obj Coproduct.Shape.r
+  toVertex (j : Coproduct.Shape) := match j with
     -- 「標準的な写像」を使おう
-    | .l => sorry
-    | .r => sorry
+    | Coproduct.Shape.l => Sum.inl
+    | Coproduct.Shape.r => Sum.inr
   naturality f := match f with
     | .id _ => by
-      sorry
+      rw [Coproduct.shapeHom_id, Functor.map_id, id_comp]
     
 /- 集合の圏における余積はdisjoint union -/
 example (F : Functor Coproduct.Shape Type) : Colimit (sumCocone F) where
   fromInitial t := {
     hom := fun x ↦ match x with
       -- `Cocone.toVertex`を使う
-      | .inl x => sorry
-      | .inr x => sorry
+      | Sum.inl x' => t.toVertex Coproduct.Shape.l x'
+      | Sum.inr x' => t.toVertex Coproduct.Shape.r x'
     comm := by
       intro j 
       -- `.l`か`.r`で場合分け
       rcases j with _ | _
-      · sorry
-      · sorry }
+      · rfl
+/-      別解
+        funext; rename_i x
+        rw [comp_app, sumCocone_toVertex]
+-/
+      · rfl
+/-      別解
+        funext; rename_i x
+        rw [comp_app, sumCocone_toVertex]
+-/ 
+  }
   uniq := by 
     intro t f 
     apply CoconeHom.ext
@@ -208,8 +220,20 @@ example (F : Functor Coproduct.Shape Type) : Colimit (sumCocone F) where
     -- `.inl`か`.inr`で場合分け
     rcases x with x | x
     -- `f = g`のとき`f x = g x`という事実を使いたい場合は、`congrFun`を使うとよい。
-    · sorry
-    · sorry
+    · show f.hom (Sum.inl x) = t.toVertex Coproduct.Shape.l x
+      rw [←f.comm]
+      apply congrFun
+      rfl
+/-    別解
+    · show f.hom (Sum.inl x) = t.toVertex Coproduct.Shape.l x
+      rw [←comp_app Sum.inl f.hom]
+      have hcomm : (sumCocone F).toVertex Coproduct.Shape.l ≫ f.hom = t.toVertex Coproduct.Shape.l := f.comm Coproduct.Shape.l
+      exact congrFun hcomm x
+-/
+    · show f.hom (Sum.inr x) = t.toVertex Coproduct.Shape.r x
+      rw [←f.comm]
+      apply congrFun
+      rfl
     
 variable {R : CommRingCat}
 
@@ -229,34 +253,57 @@ def tensorCocone (F : Functor Coproduct.Shape (CommAlgCat R)) : Cocone F where
   vertex := ⟨(F.obj .l) ⊗[R] (F.obj .r), inferInstance, inferInstance⟩
   toVertex := fun j ↦ match j with
     -- ヒント: 「標準的な写像」を使おう
-    | .l => sorry
-    | .r => sorry
+    | .l => Algebra.TensorProduct.includeLeft
+    | .r => Algebra.TensorProduct.includeRight
   naturality := by
     -- `rintro`は`intro`と`rcases`を合わせたtacticである（1行短く書ける）
     rintro i j ⟨_⟩
     -- ヒント: `simp`を試してみよう
-    sorry
+    rw [Coproduct.shapeHom_id, Functor.map_id, instCategoryCommAlgCat_id,
+      instCategoryCommAlgCat_comp, AlgHom.comp_id]
 
 /- `R`上の可換代数の圏における余積はテンソル積 -/
 example (F : Functor Coproduct.Shape (CommAlgCat R)) : Colimit (tensorCocone F) where
   fromInitial t := {
     -- ヒント: `Algebra.TensorProduct.productMap`を使う
-    hom := sorry
-    comm := by 
+    hom := Algebra.TensorProduct.productMap (t.toVertex Coproduct.Shape.l) (t.toVertex Coproduct.Shape.r)
+    comm := by
       rintro (_ | _)
       -- ヒント: `simp`を試してみよう
-      · sorry
-      · sorry }
+      · rw [tensorCocone_toVertex, instCategoryCommAlgCat_comp, Algebra.TensorProduct.productMap_left]
+      · rw [tensorCocone_toVertex, instCategoryCommAlgCat_comp, Algebra.TensorProduct.productMap_right] }
   uniq := by 
     intro t f 
     apply CoconeHom.ext
     have hₗ : ∀ a : F.obj .l, f.hom (a ⊗ₜ[R.base] 1) = t.toVertex .l a := by
       -- ヒント: `AlgHom.congr_fun`を使う
-      sorry
+      intro a
+      rw [←f.comm]
+      apply AlgHom.congr_fun
+      rfl
     have hᵣ : ∀ b : F.obj .r, f.hom (1 ⊗ₜ[R.base] b) = t.toVertex .r b := by
-      sorry
+      intro b
+      rw [←f.comm]
+      apply AlgHom.congr_fun
+      rfl
     -- ヒント: `Algebra.TensorProduct.ext'`を使う（`ext`ではなくて`ext'`）
-    sorry
+    /- 解答者注 : 以下の解答は誘導に乗れていません。 -/
+    show f.hom = Algebra.TensorProduct.productMap (t.toVertex Coproduct.Shape.l) (t.toVertex Coproduct.Shape.r)
+    repeat rw [←f.comm]
+    simp only [instCategoryCommAlgCat_Hom, tensorCocone_vertex_base, tensorCocone_toVertex, instCategoryCommAlgCat_comp]
+    ext
+    rename_i x
+    simp only [AlgHom.coe_comp, Function.comp_apply, Algebra.TensorProduct.includeLeft_apply,
+      Algebra.TensorProduct.productMap_left]
+    rw [hₗ x]
+    rw [←f.comm]
+    simp only [instCategoryCommAlgCat_Hom, tensorCocone_toVertex, instCategoryCommAlgCat_comp, tensorCocone_vertex_base]
+    rename_i x
+    simp only [AlgHom.coe_comp, AlgHom.coe_restrictScalars', Function.comp_apply,
+      Algebra.TensorProduct.includeRight_apply, Algebra.TensorProduct.productMap_apply_tmul, map_one, one_mul]
+    rw [hᵣ x]
+    rw [←f.comm]
+    rfl
 
 /- # コイコライザー -/
 
@@ -348,35 +395,46 @@ def quotCocone (F : Functor Coequalizer.Shape Type) : Cocone F where
     | .tar => fun x ↦ Quot.mk _ x
   naturality := by 
     rintro (_ | _) (_ | _) ⟨_⟩
-    · sorry
-    · sorry
+    · rw [Coequalizer.hom_id, Functor.map_id, id_comp]
+    · rfl
     · symm
-      funext x   
-      -- `Quot.sound`を使う   
-      sorry
-    · sorry
+      funext x
+      -- `Quot.sound`を使う
+      show Quot.mk (CoequalizerRel (F.map Coequalizer.ShapeHom.fst) (F.map Coequalizer.ShapeHom.snd)) (F.map Coequalizer.ShapeHom.fst x) = Quot.mk (CoequalizerRel (F.map Coequalizer.ShapeHom.fst) (F.map Coequalizer.ShapeHom.snd)) (F.map Coequalizer.ShapeHom.snd x)
+      apply Quot.sound
+      exact CoequalizerRel.rel x
+    · rw [Coequalizer.hom_id, Functor.map_id, id_comp]
 
 example (F : Functor Coequalizer.Shape Type) : Colimit (quotCocone F) where
   fromInitial t := 
     { -- `Quot.lift`を使う
-      hom := Quot.lift (t.toVertex .tar) <| by
+      hom := Quot.lift (f := t.toVertex .tar) <| by
         intro x₁ x₂ ⟨x⟩
         have h₁ : t.toVertex .tar (F.map .fst x) = t.toVertex .src x := by
-          sorry
+          show (F.map Coequalizer.ShapeHom.fst ≫ t.toVertex Coequalizer.Shape.tar) x = t.toVertex Coequalizer.Shape.src x
+          rw [t.naturality Coequalizer.ShapeHom.fst]
         have h₂ : t.toVertex .tar (F.map .snd x) = t.toVertex .src x := by
-          sorry
-        sorry
+          show (F.map Coequalizer.ShapeHom.snd ≫ t.toVertex Coequalizer.Shape.tar) x = t.toVertex Coequalizer.Shape.src x
+          rw [t.naturality Coequalizer.ShapeHom.snd]
+        rw [h₁, h₂]
       comm := by
         intro j
         funext x
         cases j
-        · sorry
-        · sorry }
+        · show t.toVertex Coequalizer.Shape.tar (F.map Coequalizer.ShapeHom.fst x) = t.toVertex Coequalizer.Shape.src x
+          show (F.map Coequalizer.ShapeHom.fst ≫ t.toVertex Coequalizer.Shape.tar) x = t.toVertex Coequalizer.Shape.src x
+          rw [t.naturality Coequalizer.ShapeHom.fst]
+        · rw [comp_app, quotCocone_toVertex] }
   uniq := by
     intro t f 
     apply CoconeHom.ext
     funext x 
     -- `Quot.ind`を使う。`apply Quot.ind _ x`のように使うとよい。
-    sorry
+    simp
+    apply Quot.ind _ x
+    intro a
+    show f.hom (Quot.mk (CoequalizerRel (F.map Coequalizer.ShapeHom.fst) (F.map Coequalizer.ShapeHom.snd)) a) = t.toVertex Coequalizer.Shape.tar a
+    rw [←f.comm]
+    rfl
 
 end Tutorial

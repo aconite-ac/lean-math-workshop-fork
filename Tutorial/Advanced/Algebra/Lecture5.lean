@@ -31,11 +31,10 @@ variable {N : Subgroup G} [N.Normal]
 theorem mem_comm {a b} : a * b ∈ N → b * a ∈ N := by
   intro hab
   -- 一度紙で計算してみて、下のように`calc`するとよいかも。
-  calc
-    b * a = sorry := by sorry
-    _ = sorry := by sorry
-    _ ∈ N := by
-      sorry
+  calc b * a
+    _ = b * a * b * b⁻¹ := by rw [mul_inv_cancel_right (b * a) b]
+    _ = b * (a * b) * b⁻¹ := by rw [mul_assoc b a b]
+    _ ∈ N := by exact Normal.conj_mem b (a * b) hab
 
 theorem mem_comm_iff (a b : G) : a * b ∈ N ↔ b * a ∈ N := ⟨mem_comm, mem_comm⟩
 
@@ -49,24 +48,41 @@ instance : Group (G ⧸ N) where
   mul := Quotient.map₂' (fun a b ↦ a * b) <| by
     -- 積が剰余類上でwell-definedか？
     -- `mem_comm`や`mem_comm_iff`が役立つかも。
-    sorry
+    rw [Relator.LiftFun]
+    intro a b hab
+    rw [Relator.LiftFun]
+    intro c d hcd
+    rw [LeftQuotient.leftRel_apply] at *
+    rw [mul_inv_rev, ←mul_assoc, Subgroup.mem_comm_iff,
+      ←mul_assoc d (c⁻¹ * a⁻¹) b, ←mul_assoc d c⁻¹ a⁻¹, mul_assoc (d * c⁻¹) a⁻¹ b]
+    apply Subgroup.mul_mem
+    exact Subgroup.mem_comm hcd
+    exact hab
   one := 1 ⋆ N
   -- 逆元を取る操作は、`a ↦ a⁻¹ ⋆ N`をliftしよう。
   inv := LeftQuotient.lift (fun a ↦ a⁻¹ ⋆ N) <| by
     -- well-defined性
-    sorry
+    intro a b hab
+    dsimp
+    rw [LeftQuotient.eq, inv_inv]
+    rw [←Subgroup.inv_mem_iff]
+    rw [mul_inv_rev, inv_inv]
+    exact Subgroup.mem_comm hab
   mul_assoc := by
     -- 結合性。まず代表元を取る。
     rintro ⟨a⟩ ⟨b⟩ ⟨c⟩
     -- 次のように`change`でゴールを見やすくするとよい
     change (a * b * c) ⋆ N = (a * (b * c)) ⋆ N
     -- もしくは`change`のかわりに、`simp`や`dsimp`を使ってもよい
-    sorry
+    rw [mul_assoc]
   one_mul := by
     rintro ⟨a⟩
-    sorry
+    show Quotient.mk'' (1 * a) = LeftQuotient.mk a
+    rw [one_mul]
   mul_inv_left := by
-    sorry
+    rintro ⟨a⟩
+    dsimp
+    rw [inv_mul_self]
 
 @[simp]
 theorem QuotientGroup.mul_eq (a b : G) : (a ⋆ N) * (b ⋆ N) = (a * b) ⋆ N := rfl
@@ -76,7 +92,13 @@ theorem one : (1 : G ⧸ N) = 1 ⋆ N := rfl
 
 @[simp]
 theorem mem_of_eq_one {a : G} : a ⋆ N = (1 : G ⧸ N) ↔ a ∈ N := by
-  sorry
+  constructor
+  · rw [one, LeftQuotient.eq, mul_one]
+    intro hai
+    exact Subgroup.inv_mem_iff.mp hai
+  · intro ha
+    rw [one, LeftQuotient.eq, mul_one]
+    exact Subgroup.inv_mem ha
 
 variable [Group G] {N : Subgroup G} [N.Normal] [Group H] 
 
@@ -84,10 +106,16 @@ variable [Group G] {N : Subgroup G} [N.Normal] [Group H]
 いわゆる商群の普遍性。 -/
 def GroupHom.kerLift (f : G →* H) (h : ∀ a ∈ N, f a = 1) : (G ⧸ N) →* H where
   toFun := LeftQuotient.lift f <| by
-    sorry
+    intro a b haib
+    have h₁ : f (a⁻¹ * b) = 1 := h (a⁻¹ * b) haib
+    rw [map_mul, map_inv] at h₁
+    rw [←inv_mul_eq_one]
+    exact h₁
   map_mul' := by
     -- `rintro ⟨a⟩`等で代表元をとると良い。
-    sorry
+    rintro ⟨a⟩ ⟨b⟩
+    dsimp
+    rw [map_mul]
 
 end Section1
 
@@ -108,8 +136,10 @@ infixr:25 " ≅* " => GroupIso
 /-- 群準同型の核は正規部分群である。 -/
 instance : f.ker.Normal where
   conj_mem := by
-    sorry
-
+    intro a n h
+    rw [GroupHom.mem_ker, map_mul, map_mul, map_inv]
+    rw [GroupHom.mem_ker] at h
+    rw [h, mul_one, mul_inv_self]
 /-
 さて、以下では`f : G →* H`について、`G ⧸ f.ker ≅* f.range`を示したい。
 しかし`f.range`の型は`Subgroup H`であり、（意図的に避けていた）ある問題が生じる。
@@ -177,7 +207,10 @@ namespace GroupHom
 def rangeRestrict : G →* f.range where
   toFun := fun a ↦ ⟨f a, by simp⟩
   map_mul' := by
-    sorry
+    intro a b
+    rw [Subgroup.ext_iff]
+    dsimp
+    rw [map_mul]
 
 /-- `rangeRestrict`の定義の確認。 -/
 @[simp]
@@ -186,7 +219,10 @@ theorem rangeRestrict_apply {a : G} : f.rangeRestrict a = f a := rfl
 /-- `f : G →* H`から誘導される`G ⧸ f.ker →* f.range`。つまり準同型定理で同型であることが主張される準同型。 -/
 def rangeKerLift : G ⧸ f.ker →* f.range :=
   f.rangeRestrict.kerLift <| by
-    sorry
+    intro a ha
+    rw [mem_ker] at ha
+    rw [Subgroup.ext_iff, rangeRestrict_apply]
+    exact ha
 
 /-- `rangeKerLift`の定義の確認。 -/
 @[simp]
@@ -195,13 +231,26 @@ theorem rangeKerLift_apply {a : G} : f.rangeKerLift (a ⋆ f.ker) = f a := rfl
 #check injective_iff_map_eq_one -- これが便利かも
 /-- `f.rangeKerLift`は単射である。 -/
 theorem rangeKerLift_injective : Function.Injective f.rangeKerLift := by
-  sorry
+  rw [injective_iff_map_eq_one]
+  rintro ⟨a⟩ h
+  rw [LeftQuotient.mk_eq, Subgroup.coe_one, Subgroup.ext_iff, rangeKerLift_apply] at h
+  dsimp at h
+  rw [LeftQuotient.mk_eq, Tutorial.one, LeftQuotient.eq, mul_one, mem_ker, map_inv]
+  calc (f a)⁻¹
+    _ = (f a)⁻¹ * ↑1 := by rw [mul_one]
+    _ = (f a)⁻¹ * (f a) := by rw [←h]
+    _ = 1 := by rw [inv_mul_self]
 
 /-- `f.rangeKerLift`は全射である。 -/
 theorem rangeKerLift_surjective : Function.Surjective f.rangeKerLift := by
   -- `f.range.Elem`から元を取るとき、下のようにすると`y : H`が取れ、わかりやすい
   intro ⟨y, hy⟩
-  sorry
+  rw [mem_range] at hy
+  have ⟨x, hx⟩ := hy
+  exists x ⋆ f.ker
+  rw [Subgroup.ext_iff, rangeKerLift_apply]
+  dsimp
+  exact hx
 
 /-- 群の準同型定理。`G ⧸ f.ker`と`f.range`の間に自然な群同型が誘導される。 -/
 -- 全て必要なことは示したので、やることはない。

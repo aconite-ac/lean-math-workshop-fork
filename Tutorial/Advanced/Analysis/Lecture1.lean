@@ -23,12 +23,12 @@ example : (fun x ↦ x ^ 2 : ℝ → ℝ) =o[𝓝 0] (fun x ↦ x : ℝ → ℝ)
 
 -- ランダウ記号の計算は、あたかも等式の変形のように扱えて便利
 example : (fun x ↦ 11 * x ^ 5 + 4 * x ^ 3 : ℝ → ℝ) =o[𝓝 0] (fun x ↦ 23 * x ^ 2 : ℝ → ℝ) := by
-  have h₁ := 
+  have h₁ : (fun x ↦ 11 * x ^ 5 : ℝ → ℝ) =o[𝓝 0] fun x ↦ 23 * x ^ 2 := 
     calc (fun x ↦  11 * x ^ 5 : ℝ → ℝ) 
       _ =O[𝓝 0] fun x ↦ x ^ 5        := by apply isBigO_const_mul_self
       _ =o[𝓝 0] fun x ↦ x ^ 2        := by apply isLittleO_pow_pow (by linarith)
       _ =O[𝓝 0] fun x ↦ 23 * x ^ 2   := by apply isBigO_self_const_mul _ (by linarith)
-  have h₂ := 
+  have h₂ : (fun x ↦ 4 * x ^ 3 : ℝ → ℝ) =o[𝓝 0] fun x ↦ 23 * x ^ 2 := 
     calc (fun x ↦ 4 * x ^ 3 : ℝ → ℝ) 
       _ =O[𝓝 0] fun x ↦ x ^ 3        := by apply isBigO_const_mul_self
       _ =o[𝓝 0] fun x ↦ x ^ 2        := by apply isLittleO_pow_pow (by linarith)
@@ -84,10 +84,12 @@ example (a : ℝ) : HasDerivAt (fun x ↦ x ^ 2) (2 * a) a := by
     _ =o[𝓝 0] fun h ↦ h                     := ?eq2
   case eq1 =>
     -- ヒント: 関数の間の等号を示したいときは`funext`を使おう
-    sorry
+    funext
+    rename_i x
+    ring
   case eq2 =>
     -- ヒント: `apply?`を使って必要な命題を探せる。2行以内で証明できるはず。
-    sorry
+    apply isLittleO_pow_id (by linarith)
 
 -- 4つめの定義を使っても示すことができるが、ゼロ除算の扱いに注意する必要がある。
 example (a : ℝ) : HasDerivAt (fun x ↦ x ^ 2) (2 * a) a := by
@@ -135,11 +137,24 @@ end Landau
 theorem hasDerivAt_const (c : ℝ) : HasDerivAt (fun _ ↦ c) 0 a := by
   rw [hasDerivAt_iff_isLittleO]
   -- ヒント: `simp`を使おう
-  sorry 
+  calc (fun x ↦ c - c - (x - a) * 0)
+    _ = (fun x ↦ 0) := by ring_nf
+    _ =o[𝓝 a] (fun x ↦ x - a) := ?eq1
+  case eq1 =>
+    rw [isLittleO_const_left]
+    left
+    rfl
 
 theorem hasDerivAt_id (a : ℝ) : HasDerivAt id 1 a := by
   rw [hasDerivAt_iff_isLittleO]
-  sorry
+  calc (fun x ↦ id x - id a - (x - a) * 1)
+    _ = (fun x ↦ x - a - (x - a) * 1) := by rfl
+    _ = (fun x ↦ 0) := by ring_nf
+    _ =o[𝓝 a] (fun x ↦ x - a) := ?eq1
+  case eq1 =>
+    rw [isLittleO_const_left]
+    left
+    rfl
 
 theorem HasDerivAt.add (hf : HasDerivAt f f' a) (hg : HasDerivAt g g' a) :
     HasDerivAt (fun x ↦ f x + g x) (f' + g') a := by
@@ -149,16 +164,24 @@ theorem HasDerivAt.add (hf : HasDerivAt f f' a) (hg : HasDerivAt g g' a) :
     _ =o[𝓝 a] fun x ↦ x - a                                            := ?eq2
   case eq1 =>
     -- ヒント: 関数の間の等号を示したいときは`funext`を使おう
-    sorry
+    funext
+    rename_i x
+    ring
   case eq2 =>
     -- ヒント: `apply?`を使って必要な命題を探せる
-    sorry
+    exact IsLittleO.add hf hg
 
 theorem HasDerivAt.const_mul (c : ℝ) (hf : HasDerivAt f f' a) :
     HasDerivAt (fun x ↦ c * f x) (c * f') a := by
   rw [hasDerivAt_iff_isLittleO] at *
   -- ヒント: `HasDerivAt.add`のときと同様に`calc`で計算できる
-  sorry
+  calc (fun x ↦ c * f x - c * f a - (x - a) * (c * f'))
+    _ = (fun x ↦ c * (f x - f a - (x - a) * f')) := ?eq1
+    _ =o[𝓝 a] fun x ↦ x - a := by exact IsLittleO.const_mul_left hf c
+  case eq1 =>
+    funext
+    rename_i x
+    ring
 
 -- Lecture 2で用いる
 theorem HasDerivAt.neg (hf : HasDerivAt f f' a) : 
@@ -186,10 +209,12 @@ theorem HasDerivAt.isBigO_sub (h : HasDerivAt f f' a) :
     _ =O[𝓝 a] fun x ↦ x - a  := ?eq2
   case eq1 =>
     -- ヒント: 関数の間の等号を示したいときは`funext`を使おう
-    sorry
+    funext
+    rename_i x
+    ring
   case eq2 =>
     -- ヒント: `apply?`を使って必要な命題を探せる
-    sorry
+    exact isBigO_const_mul_self f' (fun x ↦ x - a)
 
 /-- 微分可能ならば連続 -/
 theorem HasDerivAt.continuousAt (h : HasDerivAt f f' a) : 
@@ -224,15 +249,18 @@ theorem HasDerivAt.comp (hf : HasDerivAt f f' a) (hg : HasDerivAt g g' (f a)) :
   apply h₁.triangle h₂
   case eq1 =>
     -- `IsLittleO.comp_tendsto`が使える
-    sorry
+    apply IsLittleO.comp_tendsto hg  -- h := (fun x ↦ f x) f := (fun x ↦ g x - g (f a) - (x - f a) * g') g := x - f a
+    exact continuousAt hf
   case eq2 => 
-    sorry
+    exact HasDerivAt.isBigO_sub hf
   case eq3 =>
-    sorry
+    funext
+    rename_i x
+    ring
   case eq4 =>
-    sorry
+    exact isBigO_const_mul_self g' (fun x ↦ f x - f a - (x - a) * f')
   case eq5 =>
-    sorry
+    exact hf
 
 -- 次の問題で使うかも？
 #check IsLittleO.const_mul_left
@@ -246,25 +274,28 @@ theorem HasDerivAt.mul {f : ℝ → ℝ} (hf : HasDerivAt f f' a) (hg : HasDeriv
           (f a * (g x - g a - (x - a) * g') + (f x - f a) * (g x - g a)) := ?eq1
     _ =o[𝓝 a] fun x ↦ x - a                                             := ?eq2
   case eq1 =>
-    sorry
+    funext; rename_i x
+    ring
   case eq2 =>
     have hf' : (fun x ↦ g a * (f x - f a - (x - a) * f')) =o[𝓝 a] fun x ↦ x - a := 
-      sorry
+      IsLittleO.const_mul_left hf (g a)
     have hg' : (fun x ↦ f a * (g x - g a - (x - a) * g')) =o[𝓝 a] fun x ↦ x - a := 
-      sorry
-    have hfg := 
+      IsLittleO.const_mul_left hg (f a)
+    have hfg : (fun x ↦ (f x - f a) * (g x - g a)) =o[𝓝 a] fun x ↦ x - a := 
       calc (fun x ↦ (f x - f a) * (g x - g a))
         _ =o[𝓝 a] fun x ↦ (x - a) * 1      := ?eq3
         _ = fun x ↦ x - a                   := ?eq4
-    sorry
+    apply Asymptotics.IsLittleO.add hf'
+    apply Asymptotics.IsLittleO.add hg'
+    exact hfg
     case eq3 =>
       have hg'' : (fun x ↦ g x - g a) =o[𝓝 a] fun _ ↦ (1 : ℝ) := by
         rw [Asymptotics.isLittleO_one_iff, tendsto_sub_nhds_zero_iff]
-        sorry
+        exact continuousAt hg
       -- `IsBigO.mul_isLittleO`が使える
-      sorry
+      apply IsBigO.mul_isLittleO (isBigO_sub hf) hg''
     case eq4 =>
-      sorry
+      funext; ring
   
 -- 次の問題で使うかも？
 #check Nat.succ_eq_add_one
@@ -273,7 +304,31 @@ theorem HasDerivAt.mul {f : ℝ → ℝ} (hf : HasDerivAt f f' a) (hg : HasDeriv
 theorem hasDerivAt_pow (n : ℕ) (a : ℝ) : 
     HasDerivAt (fun x ↦ x ^ (n + 1)) ((n + 1) * a ^ n) a := by
   -- ヒント: `induction n`で帰納法が使える。`induction`の使い方は`cases`と大体同じ。
-  sorry
+  have hbase : HasDerivAt (fun x ↦ x) 1 a := hasDerivAt_id a
+  induction n
+  case zero =>
+--    simp
+--    exact hbase
+    rw [Nat.zero_eq, zero_add, Nat.cast_zero, pow_zero, mul_one, zero_add]
+    conv =>
+      arg 1; intro x; rw [pow_one]
+    exact hbase
+  case succ d hd =>
+    simp only [Nat.succ_eq_add_one]
+    have h₁ : HasDerivAt (fun x ↦ x ^ (d + 1) * x) ((↑d + 1) * a ^ d * a + a ^ (d + 1) * 1) a := HasDerivAt.mul hd hbase
+    simp at h₁
+    rw [pow_succ] at h₁ ⊢
+    conv =>
+      arg 1; intro x; rw [pow_succ]; rw [pow_succ]
+    conv at h₁ =>
+      arg 1; intro x; rw [pow_succ]
+    rw [hasDerivAt_iff_isLittleO] at h₁ ⊢
+    have h₂ : (fun x ↦ x * x ^ d * x - a * a ^ d * a - (x - a) * ((↑d + 1) * a ^ d * a + a * a ^ d)) = (fun x ↦ x * (x * x ^ d) - a * (a * a ^ d) - (x - a) * ((↑(d + 1) + 1) * (a * a ^ d))) := by
+      funext
+      simp
+      ring_nf
+    rw [←h₂]
+    exact h₁
 
 /- 
 TIPS: 右画面の表示に現れる`↑n`はcoercionといって、ここでは自然数を実数と思いたいときに現れる。
@@ -283,7 +338,7 @@ TIPS: 右画面の表示に現れる`↑n`はcoercionといって、ここでは
 -- 再び`x ↦ x ^ 2`の微分。すぐ上で示した`hasDerivAt_pow`を使ってみよう。
 example (a : ℝ) : HasDerivAt (fun x ↦ x ^ 2) (2 * a) a := by
   suffices HasDerivAt (fun x ↦ x ^ 2) (((1 : ℕ) + 1) * a ^ 1) a by simpa [one_add_one_eq_two]
-  sorry
+  exact hasDerivAt_pow 1 a
 
 /- # Leanでの部分関数の扱いについて
 少し発展的な話題となります。読み飛ばしても問題ありません。
